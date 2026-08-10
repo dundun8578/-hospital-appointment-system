@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itheima.blogbackend.mapper.UserMapper">
+
+    <!-- 自定义SQL示例 -->
+    <select id="selectUserWithPosts" resultType="com.itheima.blogbackend.entity.User">
+        SELECT u.*
+        FROM user u
+        LEFT JOIN post p ON u.id = p.user_id
+        WHERE u.id = #{userId}
+    </select>
+
+</mapper>
