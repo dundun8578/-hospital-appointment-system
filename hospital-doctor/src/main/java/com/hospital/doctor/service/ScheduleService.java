@@ -68,5 +68,10 @@ public interface ScheduleService extends IService<Schedule> {
      * @param scheduleId 排班ID
      * @param status     状态
      */
+    /**
+     * 获取医生最近可预约日期
+     */
+    java.time.LocalDate getNextAvailableDate(Long doctorId);
+
     void updateScheduleStatus(Long scheduleId, Integer status);
 }

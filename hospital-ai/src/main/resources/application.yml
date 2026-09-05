@@ -1,0 +1,49 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: hospital-ai
+
+  profiles:
+    active: dev
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/hospital_appointment?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root123
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 0
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+    banner: false
+  mapper-locations: classpath*:/mapper/**/*.xml, classpath*:/mapper/*.xml
+  type-aliases-package: com.hospital.doctor.entity
+
+# AI导诊（OpenAI兼容协议）：enabled=true后生效
+# 对话模型示例: DeepSeek https://api.deepseek.com (deepseek-chat) / 智谱 / Kimi / 通义
+ai:
+  enabled: false
+  base-url: https://api.deepseek.com
+  api-key: sk-your-api-key
+  model: deepseek-chat
+  timeout-ms: 30000
+
+logging:
+  level:
+    root: INFO
+    com.hospital: DEBUG

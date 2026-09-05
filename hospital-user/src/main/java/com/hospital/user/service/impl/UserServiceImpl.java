@@ -2,8 +2,8 @@ package com.hospital.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hospital.auth.utils.JwtUtil;
-import com.hospital.auth.utils.PasswordEncoderUtil;
+import com.hospital.common.jwt.JwtUtil;
+import com.hospital.common.utils.PasswordEncoderUtil;
 import com.hospital.common.BusinessException;
 import com.hospital.common.ResultCode;
 import com.hospital.user.dto.LoginDTO;
@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+
+import java.time.LocalDate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +55,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在: " + username);
         }
-        return user;
+        // 适配Spring Security的UserDetails（登录校验由JwtInterceptor承担，此方法供扩展使用）
+        return org.springframework.security.core.userdetails.User
+                .withUsername(user.getUsername())
+                .password(user.getPassword() == null ? "" : user.getPassword())
+                .accountLocked(user.getStatus() == null || user.getStatus() != 1)
+                .build();
     }
 
     /**

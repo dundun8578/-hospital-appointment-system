@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @author hospital
  * @date 2024-01-15
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.hospital.common", "com.hospital.user"})
 public class UserApplication {
     public static void main(String[] args) {
         SpringApplication.run(UserApplication.class, args);

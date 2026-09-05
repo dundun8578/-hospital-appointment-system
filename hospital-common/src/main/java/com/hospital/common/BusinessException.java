@@ -1,5 +1,7 @@
 package com.hospital.common;
 
+import java.io.Serial;
+
 import lombok.Getter;
 
 /**

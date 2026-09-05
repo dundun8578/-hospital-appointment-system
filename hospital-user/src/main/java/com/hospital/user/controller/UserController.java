@@ -65,7 +65,7 @@ public class UserController {
     @Operation(summary = "获取当前用户信息", description = "需要登录")
     public Result<UserVO> getCurrentUserInfo() {
         // 从ThreadLocal获取当前用户ID
-        Long userId = com.hospital.auth.interceptor.UserContextHolder.getUserId();
+        Long userId = com.hospital.common.jwt.UserContextHolder.getUserId();
         log.info("获取用户信息: userId={}", userId);
 
         UserVO userVO = userService.getUserInfo(userId);

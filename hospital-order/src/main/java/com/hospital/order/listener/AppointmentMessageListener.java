@@ -4,6 +4,9 @@ import com.hospital.appointment.mq.AppointmentMessageDTO;
 import com.hospital.doctor.entity.Doctor;
 import com.hospital.doctor.service.DoctorService;
 import com.hospital.order.entity.Order;
+import com.hospital.order.service.NotificationService;
+import com.hospital.common.mq.OrderCancelMessage;
+import com.hospital.order.mq.OrderDelayMessageSender;
 import com.hospital.order.service.OrderService;
 import com.hospital.user.entity.User;
 import com.hospital.user.service.UserService;
@@ -16,7 +19,7 @@ import java.math.BigDecimal;
 
 /**
  * 预约消息消费者
- * 监听预约队列，异步创建订单
+ * 监听预约队列，异步创建订单，并发送延时关单消息
  *
  * @author hospital
  * @date 2024-01-15
@@ -33,6 +36,12 @@ public class AppointmentMessageListener {
 
     @Autowired
     private DoctorService doctorService;
+
+    @Autowired
+    private OrderDelayMessageSender orderDelayMessageSender;
+
+    @Autowired
+    private NotificationService notificationService;
 
     /**
      * 消费预约消息
@@ -73,8 +82,18 @@ public class AppointmentMessageListener {
             log.info("订单创建成功: orderId={}, orderNo={}, appointmentId={}",
                     orderId, order.getOrderNo(), message.getAppointmentId());
 
-            // 3. TODO: 发送预约成功通知（短信/站内信）
-            // sendNotification(message);
+            // 3. 发送预约成功短信（患者手机号随预约消息透传）
+            notificationService.sendAppointmentSuccessSms(
+                    message.getPatientPhone(), message.getPatientName(),
+                    doctor.getDoctorName(), message.getWorkDate(), order.getOrderNo());
+
+            // 3. 发送延时关单消息：15分钟后仍未支付则自动取消并回补号源
+            OrderCancelMessage delayMessage = new OrderCancelMessage();
+            delayMessage.setOrderId(orderId);
+            delayMessage.setAppointmentId(message.getAppointmentId());
+            delayMessage.setScheduleId(message.getScheduleId());
+            delayMessage.setSource("timeout");
+            orderDelayMessageSender.sendDelayMessage(delayMessage);
 
         } catch (Exception e) {
             log.error("处理预约消息失败: appointmentId={}", message.getAppointmentId(), e);

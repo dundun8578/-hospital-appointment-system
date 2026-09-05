@@ -33,11 +33,11 @@
 
     <modules>
         <module>hospital-common</module>
-        <module>hospital-auth</module>
         <module>hospital-user</module>
         <module>hospital-doctor</module>
         <module>hospital-appointment</module>
         <module>hospital-order</module>
+        <module>hospital-ai</module>
     </modules>
 
     <dependencies>
@@ -141,7 +141,8 @@
     </dependencies>
 
     <build>
-        <plugins>
+        <pluginManagement>
+                <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
@@ -155,5 +156,6 @@
                 </configuration>
             </plugin>
         </plugins>
+    </pluginManagement>
     </build>
 </project>

@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @author hospital
  * @date 2024-01-15
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.hospital.common", "com.hospital.doctor"})
 @EnableScheduling
 public class DoctorApplication {
     public static void main(String[] args) {

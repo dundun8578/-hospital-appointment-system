@@ -331,6 +331,7 @@ CREATE TABLE `appointment_order` (
     UNIQUE KEY `uk_appointment_id` (`appointment_id`),
     KEY `idx_user_id` (`user_id`),
     KEY `idx_pay_status` (`pay_status`),
+    KEY `idx_user_created` (`user_id`, `created_time`),
     KEY `idx_order_status` (`order_status`),
     KEY `idx_created_time` (`created_time`),
     CONSTRAINT `fk_order_appointment` FOREIGN KEY (`appointment_id`) REFERENCES `appointment` (`appointment_id`)

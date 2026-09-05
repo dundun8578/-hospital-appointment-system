@@ -46,7 +46,7 @@ public class AppointmentController {
      * @param appointmentCreateDTO 预约信息
      * @return 预约结果
      */
-    @RateLimit(keyPrefix = "appointment:create", timeWindow = 60, maxRequests = 5, message = "预约过于频繁，请稍后再试")
+    @RateLimit(keyPrefix = "appointment:create", timeWindow = 60, maxRequests = 10, message = "预约过于频繁，请稍后再试")
     @PostMapping("/create")
     @Operation(summary = "创建预约", description = "预约挂号，使用分布式锁+Redis原子扣减库存+MQ异步订单")
     public Result<AppointmentResultVO> createAppointment(

@@ -1,10 +1,10 @@
 package com.hospital.common.config;
 
-import com.hospital.auth.interceptor.JwtInterceptor;
 import com.hospital.common.annotation.RateLimit;
 import com.hospital.common.interceptor.IpBlacklistInterceptor;
 import com.hospital.common.interceptor.RateLimitInterceptor;
 import com.hospital.common.interceptor.RequestLogInterceptor;
+import com.hospital.common.jwt.JwtInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -94,6 +94,11 @@ public class RateLimitWebConfig implements WebMvcConfigurer {
                     .excludePathPatterns(
                             "/user/login",
                             "/user/register",
+                            "/ai/**",
+                            "/hospital/**",
+                            "/doctor/**",
+                            "/department/**",
+                            "/schedule/**",
                             "/doc.html",
                             "/doc.html/**",
                             "/swagger-ui/**",

@@ -2,6 +2,7 @@ package com.hospital.appointment.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hospital.common.BusinessException;
+import com.hospital.common.PageResult;
 import com.hospital.common.ResultCode;
 import com.hospital.appointment.dto.AppointmentCreateDTO;
 import com.hospital.appointment.dto.AppointmentQueryDTO;
@@ -51,6 +52,9 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private RedisStockUtil redisStockUtil;
 
     @Autowired
+    private com.hospital.appointment.mq.OrderCancelSender orderCancelSender;
+
+    @Autowired
     private DistributedLockUtil distributedLockUtil;
 
     @Autowired
@@ -69,7 +73,6 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private UserService userService;
 
     @Autowired
-    private com.hospital.order.service.OrderService orderService;
 
     /**
      * 创建预约（核心方法）
@@ -123,21 +126,21 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                     return AppointmentResultVO.fail("您已预约过该号源，请勿重复预约");
                 }
 
-                // 4. Redis原子扣减库存
+                // 4. Redis库存预检（不存在则从DB同步）
                 int remainStock = redisStockUtil.getStock(scheduleId);
                 if (remainStock < 0) {
                     log.warn("Redis库存不存在，尝试同步: scheduleId={}", scheduleId);
                     // 库存不存在，同步数据库库存到Redis
                     redisStockUtil.syncStockFromDb(scheduleId);
-                    remainStock = redisStockUtil.getStock(scheduleId);
                 }
 
-                if (remainStock <= 0) {
-                    log.warn("号源已约满: scheduleId={}, remainStock={}", scheduleId, remainStock);
+                // 5. Redis原子扣减库存（DECR后校验，扣成负数自动回补，防止并发超挂）
+                if (!redisStockUtil.deductStock(scheduleId)) {
+                    log.warn("号源已约满: scheduleId={}", scheduleId);
                     return AppointmentResultVO.fail("号源已约满");
                 }
 
-                // 5. 创建预约记录
+                // 6. 创建预约记录
                 Appointment appointment = new Appointment();
                 appointment.setUserId(userId);
                 appointment.setScheduleId(scheduleId);
@@ -153,12 +156,24 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 appointment.setStatus(1); // 待就诊
                 appointment.setVisitStatus(0); // 未就诊
 
-                baseMapper.insert(appointment);
+                try {
+                    baseMapper.insert(appointment);
+
+                    // DB号源同步扣减，保持与Redis最终一致
+                    scheduleService.lambdaUpdate()
+                            .eq(Schedule::getScheduleId, scheduleId)
+                            .setSql("available_count = available_count - 1")
+                            .update();
+                } catch (Exception e) {
+                    // DB写入失败，回补Redis库存
+                    redisStockUtil.restoreStock(scheduleId);
+                    throw e;
+                }
 
                 log.info("预约记录创建成功: appointmentId={}, userId={}, scheduleId={}",
                         appointment.getAppointmentId(), userId, scheduleId);
 
-                // 6. 返回预约成功
+                // 7. 返回预约成功
                 return AppointmentResultVO.success(appointment.getAppointmentId());
 
             } finally {
@@ -280,10 +295,17 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         appointment.setCancelReason(cancelReason);
         baseMapper.updateById(appointment);
 
-        // 5. 归还库存到Redis（TODO: 需要实现库存回滚）
-        // redisStockUtil.increaseStock(appointment.getScheduleId(), 1);
+        // 5. 归还号源：Redis回补 + DB库存回滚
+        redisStockUtil.restoreStock(appointment.getScheduleId());
+        scheduleService.lambdaUpdate()
+                .eq(Schedule::getScheduleId, appointment.getScheduleId())
+                .setSql("available_count = available_count + 1")
+                .update();
 
-        log.info("预约取消成功: appointmentId={}", appointmentId);
+        // 6. 联动取消待支付订单（MQ通知订单服务）
+        orderCancelSender.sendOrderCancelMessage(appointmentId, appointment.getScheduleId());
+
+        log.info("预约取消成功, 号源已回补: appointmentId={}", appointmentId);
         return true;
     }
 

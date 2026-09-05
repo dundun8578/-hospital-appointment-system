@@ -44,6 +44,12 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
     private DoctorService doctorService;
 
     @Autowired
+    private com.hospital.doctor.service.HospitalService hospitalService;
+
+    @Autowired
+    private com.hospital.doctor.service.DepartmentService departmentService;
+
+    @Autowired
     private StringRedisTemplate redisTemplate;
 
     /**
@@ -168,10 +174,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         }
 
         // 填充医院和科室信息
-        com.hospital.doctor.entity.Hospital hospital = baseMapper.selectOne(
-                new LambdaQueryWrapper<com.hospital.doctor.entity.Hospital>()
-                        .eq(com.hospital.doctor.entity.Hospital::getHospitalId, schedule.getHospitalId())
-        );
+        com.hospital.doctor.entity.Hospital hospital = hospitalService.getById(schedule.getHospitalId());
         if (hospital != null) {
             vo.setHospitalId(hospital.getHospitalId());
             vo.setHospitalName(hospital.getHospitalName());
@@ -179,10 +182,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             vo.setHospitalPhone(hospital.getPhone());
         }
 
-        com.hospital.doctor.entity.Department department = baseMapper.selectOne(
-                new LambdaQueryWrapper<com.hospital.doctor.entity.Department>()
-                        .eq(com.hospital.doctor.entity.Department::getDepartmentId, schedule.getDepartmentId())
-        );
+        com.hospital.doctor.entity.Department department = departmentService.getById(schedule.getDepartmentId());
         if (department != null) {
             vo.setDepartmentId(department.getDepartmentId());
             vo.setDepartmentName(department.getDepartmentName());
@@ -313,17 +313,14 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
 
         // 填充医院信息
         if (schedule.getHospitalId() != null) {
-            com.hospital.doctor.entity.Hospital hospital = getById(schedule.getHospitalId());
+            com.hospital.doctor.entity.Hospital hospital = hospitalService.getById(schedule.getHospitalId());
             if (hospital != null) {
                 vo.setHospitalName(hospital.getHospitalName());
             }
         }
 
         // 填充科室信息
-        com.hospital.doctor.entity.Department department = baseMapper.selectOne(
-                new LambdaQueryWrapper<com.hospital.doctor.entity.Department>()
-                        .eq(com.hospital.doctor.entity.Department::getDepartmentId, schedule.getDepartmentId())
-        );
+        com.hospital.doctor.entity.Department department = departmentService.getById(schedule.getDepartmentId());
         if (department != null) {
             vo.setDepartmentName(department.getDepartmentName());
         }

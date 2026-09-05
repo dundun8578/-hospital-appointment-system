@@ -1,84 +1,83 @@
-package com.hospital.appointment.mq;
+package com.hospital.appointment.config;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
-import java.util.Arrays;
+import com.hospital.appointment.mq.AppointmentMessageSender;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.FanoutExchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 /**
- * 预约消息消费者
- * 监听预约队列，异步创建订单
- *
- * @author hospital
- * @date 2024-01-15
+ * RabbitMQ拓扑配置
+ * 预约队列绑定死信交换机：消费失败（重试耗尽后requeue=false）的消息进入死信队列，
+ * 避免无限重入队；死信保留在队列中供人工排查与重放
  */
-@Slf4j
-@Component
-public class AppointmentMessageListener {
+@Configuration
+public class RabbitMQConfig {
 
-    @Autowired
-    private com.hospital.order.service.OrderService orderService;
+    public static final String DLX_EXCHANGE = "appointment.dlx.exchange";
+    public static final String DLQ_QUEUE = "appointment.dlq";
 
-    @Autowired
-    private com.hospital.doctor.service.DoctorService doctorService;
+    public static final String ORDER_CANCEL_EXCHANGE = "order.cancel.exchange";
+    public static final String ORDER_CANCEL_QUEUE = "order.cancel.queue";
+    public static final String ORDER_CANCEL_ROUTING_KEY = "order.cancel";
 
-    /**
-     * 消费预约消息
-     * 1. 查询医生信息获取挂号费
-     * 2. 创建订单
-     *
-     * @param message 预约消息
-     */
-    @RabbitListener(queues = com.hospital.appointment.mq.AppointmentMessageSender.QUEUE_NAME)
-    public void handleAppointmentMessage(com.hospital.appointment.mq.AppointmentMessageDTO message) {
-        log.info("收到预约消息: appointmentId={}, userId={}, scheduleId={}",
-                message.getAppointmentId(), message.getUserId(), message.getScheduleId());
+    @Bean
+    public DirectExchange appointmentExchange() {
+        return new DirectExchange(AppointmentMessageSender.EXCHANGE_NAME, true, false);
+    }
 
-        try {
-            // 1. 查询医生信息，获取挂号费
-            com.hospital.doctor.entity.Doctor doctor = doctorService.getById(message.getDoctorId());
-            if (doctor == null) {
-                log.error("医生不存在: doctorId={}", message.getDoctorId());
-                throw new RuntimeException("医生不存在");
-            }
+    @Bean
+    public Queue appointmentQueue() {
+        return QueueBuilder.durable(AppointmentMessageSender.QUEUE_NAME)
+                .deadLetterExchange(DLX_EXCHANGE)
+                .deadLetterRoutingKey(DLQ_QUEUE)
+                .build();
+    }
 
-            java.math.BigDecimal price = doctor.getPrice();
+    @Bean
+    public Binding appointmentBinding(Queue appointmentQueue, DirectExchange appointmentExchange) {
+        return BindingBuilder.bind(appointmentQueue)
+                .to(appointmentExchange)
+                .with(AppointmentMessageSender.ROUTING_KEY);
+    }
 
-            // 2. 创建订单
-            com.hospital.order.entity.Order order = new com.hospital.order.entity.Order();
-            order.setAppointmentId(message.getAppointmentId());
-            order.setUserId(message.getUserId());
-            order.setDoctorId(message.getDoctorId());
-            order.setAmount(price);
-            order.setOrderStatus(1); // 待支付
-            order.setPayStatus(0);   // 待支付
-            order.setRemark("预约挂号订单");
+    @Bean
+    public FanoutExchange appointmentDlxExchange() {
+        return new FanoutExchange(DLX_EXCHANGE, true, false);
+    }
 
-            Long orderId = orderService.createOrder(order);
+    @Bean
+    public Queue appointmentDlqQueue() {
+        return QueueBuilder.durable(DLQ_QUEUE).build();
+    }
 
-            log.info("订单创建成功: orderId={}, orderNo={}, appointmentId={}",
-                    orderId, order.getOrderNo(), message.getAppointmentId());
-
-        } catch (Exception e) {
-            log.error("处理预约消息失败: appointmentId={}", message.getAppointmentId(), e);
-            // 抛出异常让Spring AMQP重试
-            throw e;
-        }
+    @Bean
+    public Binding appointmentDlqBinding(Queue appointmentDlqQueue, FanoutExchange appointmentDlxExchange) {
+        return BindingBuilder.bind(appointmentDlqQueue).to(appointmentDlxExchange);
     }
 
     /**
-     * 处理死信队列中的消息
-     * 消费失败多次后进入死信队列
-     *
-     * @param message 预约消息
+     * 订单联动取消的交换机与队列（与 order 模块 OrderMQConfig 幂等声明，
+     * 保证即使订单服务未启动，预约服务的取消通知也能投递）
      */
-    @RabbitListener(queues = "appointment.dlq")
-    public void handleDeadLetterMessage(com.hospital.appointment.mq.AppointmentMessageDTO message) {
-        log.error("处理死信消息: appointmentId={}, userId={}, retryCount={}",
-                message.getAppointmentId(), message.getUserId(), message.getRetryCount());
+    @Bean
+    public DirectExchange orderCancelExchange() {
+        return new DirectExchange(ORDER_CANCEL_EXCHANGE, true, false);
+    }
 
-        // TODO: 记录告警日志，通知人工处理
+    @Bean
+    public Queue orderCancelQueue() {
+        return QueueBuilder.durable(ORDER_CANCEL_QUEUE).build();
+    }
+
+    @Bean
+    public Binding orderCancelBinding(Queue orderCancelQueue, DirectExchange orderCancelExchange) {
+        return BindingBuilder.bind(orderCancelQueue)
+                .to(orderCancelExchange)
+                .with(ORDER_CANCEL_ROUTING_KEY);
     }
 }

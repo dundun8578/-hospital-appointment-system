@@ -3,10 +3,14 @@ package com.hospital.order.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hospital.order.entity.Order;
 import com.hospital.order.mapper.OrderMapper;
+import com.hospital.common.mq.OrderCancelMessage;
+import com.hospital.order.mq.OrderDelayMessageSender;
 import com.hospital.order.service.OrderService;
 import com.hospital.order.vo.OrderVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -21,6 +25,9 @@ import java.math.BigDecimal;
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
 
+    @Autowired
+    private OrderDelayMessageSender orderDelayMessageSender;
+
     /**
      * 生成订单号
      * 格式：ORD + 时间戳 + 随机数
@@ -32,7 +39,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 创建订单
+     * 创建订单（幂等）
+     * appointment_id 有唯一索引：MQ重复消费/并发提交时捕获冲突，返回已存在的订单
      *
      * @param order 订单信息
      * @return 订单ID
@@ -44,7 +52,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setPayStatus(0); // 待支付
         order.setOrderStatus(1); // 待支付
 
-        baseMapper.insert(order);
+        try {
+            baseMapper.insert(order);
+        } catch (DuplicateKeyException e) {
+            // 幂等：同一预约的订单已存在，直接返回既有订单
+            Order existing = baseMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Order>()
+                            .eq(Order::getAppointmentId, order.getAppointmentId()));
+            log.warn("重复建单拦截, 返回既有订单: appointmentId={}, orderId={}",
+                    order.getAppointmentId(), existing == null ? null : existing.getOrderId());
+            return existing == null ? null : existing.getOrderId();
+        }
         log.info("订单创建成功: orderId={}, orderNo={}", order.getOrderId(), order.getOrderNo());
 
         return order.getOrderId();
