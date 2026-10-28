@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hospital.doctor.entity.Schedule;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -16,6 +17,16 @@ import java.util.List;
  */
 @Mapper
 public interface ScheduleMapper extends BaseMapper<Schedule> {
+
+    @Update("""
+            UPDATE schedule
+            SET available_count = available_count - 1
+            WHERE schedule_id = #{scheduleId}
+              AND available_count > 0
+              AND status = 1
+              AND deleted = 0
+            """)
+    int deductAvailableStock(@Param("scheduleId") Long scheduleId);
 
     /**
      * 根据医生ID和日期范围查询排班

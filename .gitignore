@@ -57,3 +57,8 @@ application-local.yml
 
 # Test reports
 test-output/
+
+# 本地运行时输出
+runtime-*.out
+runtime-*.err
+*.pid

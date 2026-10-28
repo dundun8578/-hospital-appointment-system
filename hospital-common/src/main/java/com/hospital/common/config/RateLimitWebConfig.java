@@ -4,6 +4,7 @@ import com.hospital.common.annotation.RateLimit;
 import com.hospital.common.interceptor.IpBlacklistInterceptor;
 import com.hospital.common.interceptor.RateLimitInterceptor;
 import com.hospital.common.interceptor.RequestLogInterceptor;
+import com.hospital.common.interceptor.AdminInterceptor;
 import com.hospital.common.jwt.JwtInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +35,9 @@ public class RateLimitWebConfig implements WebMvcConfigurer {
     @Autowired(required = false)
     private RequestLogInterceptor requestLogInterceptor;
 
+    @Autowired(required = false)
+    private AdminInterceptor adminInterceptor;
+
     /**
      * 配置拦截器
      * 注意：拦截器执行顺序与添加顺序相反
@@ -43,6 +47,9 @@ public class RateLimitWebConfig implements WebMvcConfigurer {
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        if (adminInterceptor != null) {
+            registry.addInterceptor(adminInterceptor).addPathPatterns("/**");
+        }
         // 1. IP黑名单拦截器（最先检查）
         if (ipBlacklistInterceptor != null) {
             registry.addInterceptor(ipBlacklistInterceptor)

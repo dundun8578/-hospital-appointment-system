@@ -3,6 +3,7 @@ package com.hospital.doctor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.cache.annotation.EnableCaching;
 
 /**
  * 医生模块启动类
@@ -12,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication(scanBasePackages = {"com.hospital.common", "com.hospital.doctor"})
 @EnableScheduling
+@EnableCaching
 public class DoctorApplication {
     public static void main(String[] args) {
         SpringApplication.run(DoctorApplication.class, args);

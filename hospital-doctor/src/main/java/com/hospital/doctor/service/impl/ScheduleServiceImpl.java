@@ -19,6 +19,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -39,6 +40,11 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> implements ScheduleService {
+
+    @Override
+    public boolean deductAvailableStock(Long scheduleId) {
+        return baseMapper.deductAvailableStock(scheduleId) == 1;
+    }
 
     @Autowired
     private DoctorService doctorService;
@@ -70,6 +76,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(cacheNames = {"doctor:detail", "doctor:department", "doctor:hospital"}, allEntries = true)
     public Long createSchedule(ScheduleCreateDTO scheduleCreateDTO) {
         log.info("创建排班: doctorId={}, workDate={}, timeSlot={}",
                 scheduleCreateDTO.getDoctorId(), scheduleCreateDTO.getWorkDate(), scheduleCreateDTO.getTimeSlot());
@@ -265,6 +272,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
      * @param status     状态
      */
     @Override
+    @CacheEvict(cacheNames = "doctor:detail", allEntries = true)
     public void updateScheduleStatus(Long scheduleId, Integer status) {
         Schedule schedule = new Schedule();
         schedule.setScheduleId(scheduleId);

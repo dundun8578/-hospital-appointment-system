@@ -11,7 +11,6 @@ import com.hospital.appointment.mapper.AppointmentMapper;
 import com.hospital.appointment.service.AppointmentService;
 import com.hospital.appointment.utils.DistributedLockUtil;
 import com.hospital.appointment.utils.RedisStockUtil;
-import com.hospital.appointment.utils.RedisStockUtil;
 import com.hospital.appointment.vo.AppointmentVO;
 import com.hospital.appointment.vo.AppointmentResultVO;
 import com.hospital.doctor.entity.Schedule;
@@ -35,7 +34,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 预约服务实现类（核心业务）
@@ -71,8 +69,6 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
     @Autowired
     private UserService userService;
-
-    @Autowired
 
     /**
      * 创建预约（核心方法）
@@ -134,7 +130,7 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                     redisStockUtil.syncStockFromDb(scheduleId);
                 }
 
-                // 5. Redis原子扣减库存（DECR后校验，扣成负数自动回补，防止并发超挂）
+                // 5. Redis Lua 原子执行「判断余量→扣减」，防止并发超挂
                 if (!redisStockUtil.deductStock(scheduleId)) {
                     log.warn("号源已约满: scheduleId={}", scheduleId);
                     return AppointmentResultVO.fail("号源已约满");
@@ -159,11 +155,10 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 try {
                     baseMapper.insert(appointment);
 
-                    // DB号源同步扣减，保持与Redis最终一致
-                    scheduleService.lambdaUpdate()
-                            .eq(Schedule::getScheduleId, scheduleId)
-                            .setSql("available_count = available_count - 1")
-                            .update();
+                    // DB侧也使用带库存条件的原子更新，避免缓存漂移时扣成负数
+                    if (!scheduleService.deductAvailableStock(scheduleId)) {
+                        throw new BusinessException(ResultCode.PARAM_INVALID, "号源已约满");
+                    }
                 } catch (Exception e) {
                     // DB写入失败，回补Redis库存
                     redisStockUtil.restoreStock(scheduleId);
@@ -186,7 +181,8 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
             throw e;
         } catch (Exception e) {
             log.error("预约系统异常: userId={}, scheduleId={}", userId, scheduleId, e);
-            return AppointmentResultVO.fail("系统异常，请稍后重试");
+            // 必须抛出异常触发事务回滚，不能把数据库异常转换为普通返回值
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "系统异常，请稍后重试");
         }
     }
 

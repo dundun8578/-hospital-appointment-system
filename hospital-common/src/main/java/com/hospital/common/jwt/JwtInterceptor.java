@@ -40,9 +40,11 @@ public class JwtInterceptor implements HandlerInterceptor {
         try {
             String username = jwtUtil.extractUsername(token);
             Long userId = jwtUtil.extractUserId(token);
+            String role = jwtUtil.extractRole(token);
 
             // 供@RequestAttribute("userId")与业务代码使用
             request.setAttribute("userId", userId);
+            request.setAttribute("role", role);
             UserContextHolder.set(userId, username);
             log.debug("Token验证成功, userId={}, username={}", userId, username);
             return true;

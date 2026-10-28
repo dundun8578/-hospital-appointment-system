@@ -15,7 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * @author hospital
  * @date 2024-01-15
  */
-@Configuration
+@Configuration("appointmentSecurityConfig")
 @EnableWebSecurity
 public class SecurityConfig {
 

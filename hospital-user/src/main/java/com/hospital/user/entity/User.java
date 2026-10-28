@@ -78,6 +78,8 @@ public class User implements Serializable {
      */
     private Integer status;
 
+    private String role;
+
     /**
      * 逻辑删除：0-未删除 1-已删除
      */

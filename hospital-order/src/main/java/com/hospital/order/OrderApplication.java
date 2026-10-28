@@ -7,7 +7,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 订单服务启动类
  * 监听预约队列异步创建订单
  */
-@SpringBootApplication(scanBasePackages = {"com.hospital.common", "com.hospital.order"})
+@SpringBootApplication(scanBasePackages = {"com.hospital.common", "com.hospital.order", "com.hospital.doctor.service", "com.hospital.user.service"})
+@org.mybatis.spring.annotation.MapperScan({"com.hospital.order.mapper", "com.hospital.doctor.mapper", "com.hospital.user.mapper"})
+@org.springframework.context.annotation.Import(com.hospital.appointment.config.RabbitMQConfig.class)
 public class OrderApplication {
 
     public static void main(String[] args) {

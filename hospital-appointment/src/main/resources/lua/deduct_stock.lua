@@ -32,4 +32,4 @@ local newStock = currentStock - deductCount
 redis.call('SET', stockKey, tostring(newStock))
 
 -- 6. 返回扣减后的库存
-return newStock
+return 1

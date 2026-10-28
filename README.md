@@ -21,8 +21,8 @@ Spring Boot 3.2.5 (Java 17) | MyBatis Plus | MySQL 8.0 | Redis | RabbitMQ | Redi
 ```
 用户预约 → 分布式锁(userId+scheduleId，防重复提交)
         → DB双重检查是否已预约
-        → Redis DECR 原子扣减号源（扣成负数自动回补，防并发超挂）
-        → 落库 appointment + 扣减 schedule.available_count（失败回补Redis）
+        → Redis Lua 原子执行「判断余量→扣减」（防并发超挂）
+        → 落库 appointment + DB条件扣减 available_count（失败回补Redis）
         → 发送MQ消息 → 订单服务异步创建订单
         → 消费失败(重试3次后) → 死信交换机 → appointment.dlq 供排查重放
 取消预约 → 校验归属与状态 → Redis回补库存 + DB号源回滚
@@ -31,6 +31,10 @@ Spring Boot 3.2.5 (Java 17) | MyBatis Plus | MySQL 8.0 | Redis | RabbitMQ | Redi
 
 ## 可靠性设计
 
+- **原子滑动窗口限流**：自定义 `@RateLimit` 注解，Redis ZSet + Lua 单次完成过期数据清理、计数、写入和续期
+- **热点数据缓存**：医院列表/详情、医生列表/详情使用 Redis JSON 缓存，TTL 10 分钟，排班变更主动失效
+- **事务消息可靠投递**：预约与 `message_outbox` 同事务落库，后台指数退避重试并等待 RabbitMQ Publisher Confirm
+- **管理员权限**：JWT 携带角色，排班创建和库存同步使用 `@AdminOnly` 在后端强制鉴权，前端提供管理页面
 - **消费幂等**：appointment_order 表 appointment_id 唯一索引，重复消费捕获冲突返回既有订单
 - **延时关单**：订单创建后写入 TTL 15 分钟延时队列（队列级TTL防队头阻塞），到期死信进入
   order.cancel.queue，仍未支付则自动取消订单并回补号源；已支付/已取消则幂等跳过
@@ -45,9 +49,14 @@ Spring Boot 3.2.5 (Java 17) | MyBatis Plus | MySQL 8.0 | Redis | RabbitMQ | Redi
 mysql -u root -p < 医院挂号系统数据库设计.sql
 ```
 
+已有数据库请执行增量脚本 `database/migration/V2__admin_cache_outbox.sql`，不要重新执行会删表的完整初始化脚本。
+
 ### 2. 配置
 
 各模块 `src/main/resources/application.yml`：数据库/Redis/RabbitMQ 连接（默认本机）。
+
+运行前请确认已安装 **JDK 17**，并启动 MySQL 8.0（3306）、Redis（6379）和 RabbitMQ（5672）。
+项目会在启动阶段创建 Redisson 客户端，因此 Redis 未启动时服务将直接启动失败。
 
 ### 3. 构建
 

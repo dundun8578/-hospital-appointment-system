@@ -48,6 +48,9 @@ public class UserVO implements Serializable {
     @Schema(description = "头像URL")
     private String avatar;
 
+    @Schema(description = "角色：USER或ADMIN")
+    private String role;
+
     @Schema(description = "创建时间")
     private LocalDateTime createdTime;
 }

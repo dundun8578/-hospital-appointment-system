@@ -28,6 +28,7 @@ CREATE TABLE `user` (
     `address` VARCHAR(200) DEFAULT NULL COMMENT '联系地址',
     `avatar` VARCHAR(200) DEFAULT NULL COMMENT '头像URL',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-正常 0-禁用',
+    `role` VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '角色：USER-普通用户 ADMIN-管理员',
     `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
     `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -43,6 +44,8 @@ INSERT INTO `user` (`username`, `password`, `real_name`, `phone`, `id_card`, `ge
 ('zhangsan', '$2a$10$YQN.9Z8W5xH7p2s9xYvKOuW8p5s7xYvKOuW8p5s7xYvKOuW8p5s7x', '张三', '13800138001', '110101199001011234', 1, '1990-01-01', '北京市朝阳区'),
 ('lisi', '$2a$10$YQN.9Z8W5xH7p2s9xYvKOuW8p5s7xYvKOuW8p5s7xYvKOuW8p5s7x', '李四', '13800138002', '110101199102022345', 2, '1991-02-02', '北京市海淀区'),
 ('wangwu', '$2a$10$YQN.9Z8W5xH7p2s9xYvKOuW8p5s7xYvKOuW8p5s7xYvKOuW8p5s7x', '王五', '13800138003', '110101199203033456', 1, '1992-03-03', '北京市西城区');
+
+UPDATE `user` SET `role` = 'ADMIN' WHERE `username` = 'zhangsan';
 
 
 -- ===================================================
@@ -342,8 +345,26 @@ INSERT INTO `appointment_order` (`order_no`, `appointment_id`, `user_id`, `docto
 ('ORD202401010001', 1, 1, 1, 100.00, 1, 1, NOW(), 2),
 ('ORD202401010002', 2, 2, 3, 90.00, 1, 2, NOW(), 2);
 
+-- 8. 事务消息表：预约与消息同事务落库，RabbitMQ不可用时后台重试
+DROP TABLE IF EXISTS `message_outbox`;
+CREATE TABLE `message_outbox` (
+    `outbox_id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '消息ID',
+    `aggregate_id` BIGINT NOT NULL COMMENT '预约ID',
+    `event_type` VARCHAR(64) NOT NULL COMMENT '事件类型',
+    `payload` TEXT NOT NULL COMMENT 'JSON消息体',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '0-待发送 1-已发送 2-等待重试',
+    `retry_count` INT NOT NULL DEFAULT 0 COMMENT '重试次数',
+    `next_retry_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下次重试时间',
+    `last_error` VARCHAR(500) DEFAULT NULL COMMENT '最后错误',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`outbox_id`),
+    UNIQUE KEY `uk_aggregate_event` (`aggregate_id`, `event_type`),
+    KEY `idx_status_retry` (`status`, `next_retry_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='事务消息表';
+
 
 -- ===================================================
--- 8. 创建数据库初始化完成标记
+-- 9. 创建数据库初始化完成标记
 -- ===================================================
-SELECT '数据库初始化完成！共创建8张表：user、hospital、department、doctor、schedule、appointment、appointment_order、视图' AS message;
+SELECT '数据库初始化完成！共创建8张表和1个视图，包含预约事务消息表' AS message;

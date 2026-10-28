@@ -6,10 +6,9 @@ import com.hospital.doctor.entity.Hospital;
 import com.hospital.doctor.mapper.HospitalMapper;
 import com.hospital.doctor.service.HospitalService;
 import com.hospital.doctor.vo.HospitalVO;
-import com.hospital.doctor.vo.DepartmentVO;
-import com.hospital.doctor.vo.DoctorVO;
-import com.hospital.doctor.service.DepartmentService;
-import com.hospital.doctor.service.DoctorService;
+import com.hospital.doctor.mapper.DepartmentMapper;
+import com.hospital.doctor.mapper.DoctorMapper;
+import org.springframework.cache.annotation.Cacheable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,10 +27,10 @@ import java.util.stream.Collectors;
 public class HospitalServiceImpl extends ServiceImpl<HospitalMapper, Hospital> implements HospitalService {
 
     @Autowired
-    private DepartmentService departmentService;
+    private DepartmentMapper departmentMapper;
 
     @Autowired
-    private DoctorService doctorService;
+    private DoctorMapper doctorMapper;
 
     /**
      * 查询医院列表
@@ -42,6 +41,7 @@ public class HospitalServiceImpl extends ServiceImpl<HospitalMapper, Hospital> i
      * @return 医院列表
      */
     @Override
+    @Cacheable(cacheNames = "hospital:list", key = "(#province ?: '') + ':' + (#city ?: '') + ':' + (#level ?: '')")
     public List<HospitalVO> getHospitalList(String province, String city, String level) {
         LambdaQueryWrapper<Hospital> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Hospital::getStatus, 1)
@@ -69,6 +69,7 @@ public class HospitalServiceImpl extends ServiceImpl<HospitalMapper, Hospital> i
      * @return 医院VO
      */
     @Override
+    @Cacheable(cacheNames = "hospital:detail", key = "#hospitalId")
     public HospitalVO getHospitalDetail(Long hospitalId) {
         Hospital hospital = baseMapper.selectById(hospitalId);
         if (hospital == null) {
@@ -77,11 +78,8 @@ public class HospitalServiceImpl extends ServiceImpl<HospitalMapper, Hospital> i
         HospitalVO vo = convertToVO(hospital);
 
         // 查询科室数量和医生数量
-        List<DepartmentVO> departments = departmentService.getDepartmentList(hospitalId);
-        vo.setDepartmentCount(departments.size());
-
-        List<DoctorVO> doctors = doctorService.getDoctorListByHospital(hospitalId);
-        vo.setDoctorCount(doctors.size());
+        vo.setDepartmentCount(departmentMapper.countActiveByHospital(hospitalId));
+        vo.setDoctorCount(doctorMapper.countActiveByHospital(hospitalId));
 
         return vo;
     }

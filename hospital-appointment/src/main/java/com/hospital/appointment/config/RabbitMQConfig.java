@@ -65,16 +65,19 @@ public class RabbitMQConfig {
      * 保证即使订单服务未启动，预约服务的取消通知也能投递）
      */
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "orderCancelExchange")
     public DirectExchange orderCancelExchange() {
         return new DirectExchange(ORDER_CANCEL_EXCHANGE, true, false);
     }
 
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "orderCancelQueue")
     public Queue orderCancelQueue() {
         return QueueBuilder.durable(ORDER_CANCEL_QUEUE).build();
     }
 
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "orderCancelBinding")
     public Binding orderCancelBinding(Queue orderCancelQueue, DirectExchange orderCancelExchange) {
         return BindingBuilder.bind(orderCancelQueue)
                 .to(orderCancelExchange)

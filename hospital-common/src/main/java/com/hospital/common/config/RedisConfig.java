@@ -42,7 +42,7 @@ public class RedisConfig {
         String redisAddress = String.format("redis://%s:%d", host, port);
         config.useSingleServer()
               .setAddress(redisAddress)
-              .setPassword(password)
+              .setPassword(password == null || password.isBlank() ? null : password)
               .setDatabase(database)
               .setConnectionMinimumIdleSize(5)
               .setConnectionPoolSize(10)

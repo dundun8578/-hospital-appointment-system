@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hospital.appointment.entity.Appointment;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -26,6 +27,15 @@ public interface AppointmentMapper extends BaseMapper<Appointment> {
      * @param limit  限制数量
      * @return 预约列表
      */
+    @Select("""
+            <script>
+            SELECT * FROM appointment
+            WHERE user_id = #{userId} AND deleted = 0
+            <if test='status != null'>AND status = #{status}</if>
+            ORDER BY created_time DESC
+            LIMIT #{offset}, #{limit}
+            </script>
+            """)
     List<Appointment> selectAppointmentList(@Param("userId") Long userId,
                                             @Param("status") Integer status,
                                             @Param("offset") Integer offset,
@@ -38,6 +48,13 @@ public interface AppointmentMapper extends BaseMapper<Appointment> {
      * @param status 预约状态
      * @return 预约数量
      */
+    @Select("""
+            <script>
+            SELECT COUNT(*) FROM appointment
+            WHERE user_id = #{userId} AND deleted = 0
+            <if test='status != null'>AND status = #{status}</if>
+            </script>
+            """)
     long countAppointments(@Param("userId") Long userId, @Param("status") Integer status);
 
     /**
@@ -47,5 +64,12 @@ public interface AppointmentMapper extends BaseMapper<Appointment> {
      * @param scheduleId 排班ID
      * @return 预约记录数
      */
+    @Select("""
+            SELECT COUNT(*) FROM appointment
+            WHERE user_id = #{userId}
+              AND schedule_id = #{scheduleId}
+              AND status IN (1, 2)
+              AND deleted = 0
+            """)
     int checkUserAppointed(@Param("userId") Long userId, @Param("scheduleId") Long scheduleId);
 }

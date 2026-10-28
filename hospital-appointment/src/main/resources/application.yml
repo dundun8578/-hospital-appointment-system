@@ -30,9 +30,11 @@ spring:
   rabbitmq:
     host: localhost
     port: 5672
-    username: guest
-    password: guest
-    virtual-host: /
+    username: ${RABBITMQ_USERNAME:hospital_local}
+    password: ${RABBITMQ_PASSWORD:hospital_local_dev_2026}
+    virtual-host: ${RABBITMQ_VHOST:hospital}
+    publisher-confirm-type: correlated
+    publisher-returns: true
     listener:
       simple:
         acknowledge-mode: auto
@@ -64,6 +66,8 @@ appointment:
   lock-wait-time: 5
   lock-lease-time: 30
   lua-script-path: lua/deduct_stock.lua
+  outbox:
+    publish-interval-ms: 2000
 
 logging:
   level:

@@ -18,6 +18,9 @@ import java.util.List;
  */
 public interface ScheduleService extends IService<Schedule> {
 
+    /** 原子扣减数据库号源，仅在仍有库存且排班有效时成功。 */
+    boolean deductAvailableStock(Long scheduleId);
+
     /**
      * 创建排班
      *

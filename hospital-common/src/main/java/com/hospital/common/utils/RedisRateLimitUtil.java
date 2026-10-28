@@ -2,10 +2,15 @@ package com.hospital.common.utils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.TimeUnit;
+import jakarta.annotation.PostConstruct;
+import java.util.Collections;
+import java.util.UUID;
 
 /**
  * Redis限流工具类
@@ -20,6 +25,16 @@ public class RedisRateLimitUtil {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    private DefaultRedisScript<Long> slidingWindowScript;
+
+    @PostConstruct
+    public void init() {
+        slidingWindowScript = new DefaultRedisScript<>();
+        slidingWindowScript.setScriptSource(new ResourceScriptSource(
+                new ClassPathResource("lua/sliding_window_rate_limit.lua")));
+        slidingWindowScript.setResultType(Long.class);
+    }
 
     /**
      * 限流Key前缀
@@ -48,29 +63,21 @@ public class RedisRateLimitUtil {
     public boolean tryAcquire(String key, int timeWindow, int maxRequests) {
         String redisKey = String.format(RATE_LIMIT_KEY_PREFIX, key);
         long currentTime = System.currentTimeMillis();
-        long windowStart = currentTime - timeWindow * 1000L;
 
         try {
-            // 1. 移除窗口外的记录
-            redisTemplate.opsForZSet().removeRangeByScore(redisKey, 0, windowStart);
-
-            // 2. 统计当前窗口内的请求数
-            Long count = redisTemplate.opsForZSet().zCard(redisKey);
-
-            // 3. 判断是否超过限流阈值
-            if (count != null && count >= maxRequests) {
-                log.warn("请求被限流: key={}, count={}, max={}", key, count, maxRequests);
-                return false;
+            String requestId = currentTime + ":" + UUID.randomUUID();
+            Long result = redisTemplate.execute(
+                    slidingWindowScript,
+                    Collections.singletonList(redisKey),
+                    String.valueOf(currentTime),
+                    String.valueOf(timeWindow * 1000L),
+                    String.valueOf(maxRequests),
+                    requestId);
+            boolean allowed = result != null && result == 1L;
+            if (!allowed) {
+                log.warn("请求被限流: key={}, max={}", key, maxRequests);
             }
-
-            // 4. 添加当前请求记录
-            redisTemplate.opsForZSet().add(redisKey, String.valueOf(currentTime), currentTime);
-
-            // 5. 设置过期时间（防止无限增长）
-            redisTemplate.expire(redisKey, timeWindow, TimeUnit.SECONDS);
-
-            log.debug("限流通过: key={}, count={}, max={}", key, count + 1, maxRequests);
-            return true;
+            return allowed;
 
         } catch (Exception e) {
             log.error("限流异常: key={}", key, e);

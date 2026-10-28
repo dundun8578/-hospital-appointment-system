@@ -6,6 +6,7 @@
         <div class="actions">
           <el-button link @click="$router.push('/ai')">AI导诊</el-button>
           <el-button v-if="token" link @click="$router.push('/appointments')">我的预约</el-button>
+          <el-button v-if="isAdmin" link @click="$router.push('/admin')">管理后台</el-button>
           <el-button v-if="!token" type="primary" plain @click="$router.push('/login')">登录</el-button>
           <el-button v-else link @click="logout">{{ nickname }} · 退出</el-button>
         </div>
@@ -24,6 +25,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const token = ref(localStorage.getItem('token'))
 const nickname = ref(JSON.parse(localStorage.getItem('userInfo') || '{}').realName || '用户')
+const isAdmin = ref(JSON.parse(localStorage.getItem('userInfo') || '{}').role === 'ADMIN')
 
 function logout() {
   localStorage.removeItem('token')

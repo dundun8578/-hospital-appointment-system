@@ -104,6 +104,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         user.setAddress(registerDTO.getAddress());
         user.setStatus(1);
+        user.setRole("USER");
 
         // 5. 保存到数据库
         baseMapper.insert(user);
@@ -111,7 +112,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         log.info("用户注册成功: userId={}, username={}", user.getUserId(), user.getUsername());
 
         // 6. 生成Token并返回
-        String token = jwtUtil.generateToken(user.getUserId(), user.getUsername());
+        String token = jwtUtil.generateToken(user.getUserId(), user.getUsername(), user.getRole());
         UserVO userVO = convertToVO(user);
 
         return new LoginVO(token, userVO);
@@ -144,7 +145,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
 
         // 4. 生成Token
-        String token = jwtUtil.generateToken(user.getUserId(), user.getUsername());
+        String token = jwtUtil.generateToken(user.getUserId(), user.getUsername(), user.getRole());
 
         // 5. 转换为VO
         UserVO userVO = convertToVO(user);

@@ -10,6 +10,10 @@ export const getDepartments = (hospitalId) => request.get(`/department/list/${ho
 export const getDoctors = (departmentId) => request.get(`/doctor/list/${departmentId}`)
 export const getDoctorSchedule = (doctorId) => request.get(`/schedule/doctor/${doctorId}`)
 
+// ---------- 管理端 ----------
+export const createSchedule = (data) => request.post('/schedule/create', data)
+export const syncAllScheduleStock = () => request.post('/schedule/sync/batch')
+
 // ---------- 预约 ----------
 export const createAppointment = (data) => request.post('/appointment/create', data)
 export const getMyAppointments = (params) => request.get('/appointment/list', { params })

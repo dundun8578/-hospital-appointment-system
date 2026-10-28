@@ -9,6 +9,7 @@ import com.hospital.doctor.vo.DoctorVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -31,6 +32,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
     private com.hospital.doctor.service.HospitalService hospitalService;
 
     @Autowired
+    @org.springframework.context.annotation.Lazy
     private com.hospital.doctor.service.ScheduleService scheduleService;
 
     /**
@@ -40,6 +42,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
      * @return 医生列表
      */
     @Override
+    @Cacheable(cacheNames = "doctor:department", key = "#departmentId")
     public List<DoctorVO> getDoctorListByDepartment(Long departmentId) {
         LambdaQueryWrapper<Doctor> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Doctor::getDepartmentId, departmentId)
@@ -59,6 +62,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
      * @return 医生VO
      */
     @Override
+    @Cacheable(cacheNames = "doctor:detail", key = "#doctorId")
     public DoctorVO getDoctorDetail(Long doctorId) {
         Doctor doctor = baseMapper.selectById(doctorId);
         if (doctor == null) {
@@ -80,6 +84,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
      * @return 医生列表
      */
     @Override
+    @Cacheable(cacheNames = "doctor:hospital", key = "#hospitalId")
     public List<DoctorVO> getDoctorListByHospital(Long hospitalId) {
         LambdaQueryWrapper<Doctor> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Doctor::getHospitalId, hospitalId)

@@ -6,8 +6,7 @@ import com.hospital.doctor.entity.Department;
 import com.hospital.doctor.mapper.DepartmentMapper;
 import com.hospital.doctor.service.DepartmentService;
 import com.hospital.doctor.vo.DepartmentVO;
-import com.hospital.doctor.vo.DoctorVO;
-import com.hospital.doctor.service.DoctorService;
+import com.hospital.doctor.mapper.DoctorMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,7 +25,7 @@ import java.util.stream.Collectors;
 public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Department> implements DepartmentService {
 
     @Autowired
-    private DoctorService doctorService;
+    private DoctorMapper doctorMapper;
 
     /**
      * 根据医院ID查询科室列表
@@ -95,8 +94,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         org.springframework.beans.BeanUtils.copyProperties(department, vo);
 
         // 查询该科室下的医生数量
-        List<DoctorVO> doctors = doctorService.getDoctorListByDepartment(department.getDepartmentId());
-        vo.setDoctorCount(doctors.size());
+        vo.setDoctorCount(doctorMapper.countActiveByDepartment(department.getDepartmentId()));
 
         return vo;
     }

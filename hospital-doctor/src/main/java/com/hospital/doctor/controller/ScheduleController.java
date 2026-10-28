@@ -1,6 +1,7 @@
 package com.hospital.doctor.controller;
 
 import com.hospital.common.Result;
+import com.hospital.common.annotation.AdminOnly;
 import com.hospital.doctor.dto.ScheduleCreateDTO;
 import com.hospital.doctor.dto.ScheduleQueryDTO;
 import com.hospital.doctor.service.ScheduleService;
@@ -37,6 +38,7 @@ public class ScheduleController {
      * @return 排班ID
      */
     @PostMapping("/create")
+    @AdminOnly
     @Operation(summary = "创建排班", description = "管理员创建排班并同步号源到Redis")
     public Result<Long> createSchedule(@Valid @RequestBody ScheduleCreateDTO scheduleCreateDTO) {
         log.info("创建排班: {}", scheduleCreateDTO);
@@ -93,6 +95,7 @@ public class ScheduleController {
      * @return 成功标识
      */
     @PostMapping("/sync/{scheduleId}")
+    @AdminOnly
     @Operation(summary = "同步号源到Redis", description = "手动同步单个排班库存到Redis")
     public Result<Void> syncStockToRedis(@PathVariable Long scheduleId) {
         log.info("手动同步号源到Redis: scheduleId={}", scheduleId);
@@ -106,6 +109,7 @@ public class ScheduleController {
      * @return 成功标识
      */
     @PostMapping("/sync/batch")
+    @AdminOnly
     @Operation(summary = "批量同步号源", description = "同步未来30天所有排班库存到Redis")
     public Result<Void> batchSyncStockToRedis() {
         log.info("手动批量同步号源到Redis");

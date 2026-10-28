@@ -7,6 +7,7 @@ const routes = [
   { path: '/department/:departmentId/doctors', component: () => import('../views/DoctorListView.vue') },
   { path: '/doctor/:doctorId/schedule', component: () => import('../views/ScheduleView.vue') },
   { path: '/appointments', component: () => import('../views/MyAppointmentsView.vue'), meta: { needAuth: true } },
+  { path: '/admin', component: () => import('../views/AdminView.vue'), meta: { needAuth: true, admin: true } },
   { path: '/ai', component: () => import('../views/AiTriageView.vue') }
 ]
 
@@ -20,6 +21,8 @@ router.beforeEach((to) => {
   if (to.meta.needAuth && !token) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
+  const user = JSON.parse(localStorage.getItem('userInfo') || '{}')
+  if (to.meta.admin && user.role !== 'ADMIN') return '/'
   return true
 })
 
