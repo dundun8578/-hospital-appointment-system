@@ -27,12 +27,13 @@ public interface AppointmentService extends IService<Appointment> {
     com.hospital.appointment.vo.AppointmentResultVO createAppointment(Long userId, AppointmentCreateDTO appointmentCreateDTO);
 
     /**
-     * 根据ID查询预约详情
+     * 查询当前用户拥有的预约详情
      *
      * @param appointmentId 预约ID
+     * @param userId 当前登录用户ID，由服务端认证取得
      * @return 预约VO
      */
-    AppointmentVO getAppointmentDetail(Long appointmentId);
+    AppointmentVO getAppointmentDetail(Long appointmentId, Long userId);
 
     /**
      * 查询用户预约列表

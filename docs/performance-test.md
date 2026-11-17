@@ -1,5 +1,10 @@
 # 性能测试记录
 
+当前可用的只读压测入口：`scripts/run-query-load.ps1 -JMeter <jmeter.bat路径> -Users 200 -Loops 10`。
+该计划请求8083的医院列表并校验业务码，仅能衡量查询性能，不能用作预约吞吐量结论。
+原 `appointment_test_plan.jmx` 为旧版参考：8080/api、表单请求和共享账号均与当前系统不匹配，禁止直接用它生成简历指标。
+本机尚未找到JMeter命令，计划已准备，尚未执行正式压测。
+
 项目提供 `jmeter/scripts/appointment_test_plan.jmx`。简历中的并发数、P95、缓存命中率和 Lua 耗时必须以实测数据为准。
 
 ## 测试前提

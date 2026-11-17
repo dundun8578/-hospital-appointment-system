@@ -20,6 +20,7 @@ public class MessageOutbox {
     private Integer status;
     private Integer retryCount;
     private LocalDateTime nextRetryTime;
+    @com.baomidou.mybatisplus.annotation.TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
     private String lastError;
     private LocalDateTime createdTime;
     private LocalDateTime updatedTime;

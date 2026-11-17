@@ -187,15 +187,20 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     }
 
     /**
-     * 根据ID查询预约详情
+     * 查询当前用户拥有的预约详情
      *
      * @param appointmentId 预约ID
+     * @param userId 当前登录用户ID，由服务端认证取得
      * @return 预约VO
      */
     @Override
-    public AppointmentVO getAppointmentDetail(Long appointmentId) {
+    public AppointmentVO getAppointmentDetail(Long appointmentId, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
         Appointment appointment = baseMapper.selectById(appointmentId);
-        if (appointment == null) {
+        // 他人预约与不存在的预约使用相同响应，避免泄露预约是否存在。
+        if (appointment == null || !userId.equals(appointment.getUserId())) {
             throw new BusinessException(ResultCode.APPOINTMENT_NOT_FOUND);
         }
 
@@ -287,9 +292,15 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         }
 
         // 4. 更新预约状态
-        appointment.setStatus(3); // 已取消
-        appointment.setCancelReason(cancelReason);
-        baseMapper.updateById(appointment);
+        boolean cancelled = lambdaUpdate()
+                .eq(Appointment::getAppointmentId, appointmentId)
+                .eq(Appointment::getStatus, 1)
+                .set(Appointment::getStatus, 3)
+                .set(Appointment::getCancelReason, cancelReason)
+                .update();
+        if (!cancelled) {
+            throw new BusinessException(ResultCode.APPOINTMENT_CANCELLED, "该预约已被处理");
+        }
 
         // 5. 归还号源：Redis回补 + DB库存回滚
         redisStockUtil.restoreStock(appointment.getScheduleId());

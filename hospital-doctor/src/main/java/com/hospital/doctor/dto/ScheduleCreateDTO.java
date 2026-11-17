@@ -26,12 +26,15 @@ public class ScheduleCreateDTO {
      * 排班日期
      */
     @NotNull(message = "排班日期不能为空")
+    @jakarta.validation.constraints.FutureOrPresent(message = "日期不能早于今天")
     private LocalDate workDate;
 
     /**
      * 时段：1-上午 2-下午 3-晚上
      */
     @NotNull(message = "时段不能为空")
+    @jakarta.validation.constraints.Min(1)
+    @jakarta.validation.constraints.Max(3)
     private Integer timeSlot;
 
     /**

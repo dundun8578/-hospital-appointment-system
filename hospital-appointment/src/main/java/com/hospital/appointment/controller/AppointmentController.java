@@ -75,9 +75,11 @@ public class AppointmentController {
      */
     @GetMapping("/{appointmentId}")
     @Operation(summary = "查询预约详情", description = "包含医生、医院、科室信息")
-    public Result<AppointmentVO> getAppointmentDetail(@PathVariable Long appointmentId) {
+    public Result<AppointmentVO> getAppointmentDetail(
+            @PathVariable Long appointmentId,
+            @RequestAttribute("userId") Long userId) {
         log.info("查询预约详情: appointmentId={}", appointmentId);
-        AppointmentVO appointment = appointmentService.getAppointmentDetail(appointmentId);
+        AppointmentVO appointment = appointmentService.getAppointmentDetail(appointmentId, userId);
         return Result.success(appointment);
     }
 

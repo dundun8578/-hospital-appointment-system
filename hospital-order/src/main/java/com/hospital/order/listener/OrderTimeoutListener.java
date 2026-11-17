@@ -35,7 +35,11 @@ public class OrderTimeoutListener {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private com.hospital.order.mapper.AppointmentCloseMapper appointmentCloseMapper;
+
     @RabbitListener(queues = "order.cancel.queue")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void handleOrderCancel(OrderCancelMessage message) {
         log.info("收到关单消息: orderId={}, appointmentId={}, source={}",
                 message.getOrderId(), message.getAppointmentId(), message.getSource());
@@ -66,13 +70,26 @@ public class OrderTimeoutListener {
             }
 
             boolean isUserCancel = "user_cancel".equals(message.getSource());
-            order.setOrderStatus(isUserCancel ? 3 : 2); // 3-已取消 2-超时关闭
-            order.setRemark(isUserCancel ? "用户取消预约，订单同步取消" : "超时未支付，系统自动取消");
-            orderService.updateById(order);
+            boolean closed = orderService.lambdaUpdate()
+                    .eq(Order::getOrderId, order.getOrderId())
+                    .eq(Order::getPayStatus, 0)
+                    .eq(Order::getOrderStatus, 1)
+                    .set(Order::getOrderStatus, 3)
+                    .set(Order::getPayStatus, 2)
+                    .set(Order::getRemark, isUserCancel ? "用户取消预约" : "超时未支付，系统自动取消")
+                    .update();
+            if (!closed) return;
 
             // 超时关单需要回补号源（用户取消预约时号源已由预约服务回补，不重复操作）
-            if (!isUserCancel) {
-                restoreStock(message.getScheduleId());
+            if (!isUserCancel && appointmentCloseMapper.closePending(order.getAppointmentId(), message.getScheduleId()) == 1) {
+                scheduleService.lambdaUpdate()
+                        .eq(Schedule::getScheduleId, message.getScheduleId())
+                        .setSql("available_count = available_count + 1").update();
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                        new org.springframework.transaction.support.TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() { restoreRedisStock(message.getScheduleId()); }
+                        });
             }
             log.info("关单处理完成: orderId={}, source={}", order.getOrderId(), message.getSource());
         } catch (BusinessException e) {
@@ -86,14 +103,10 @@ public class OrderTimeoutListener {
     /**
      * 回补号源：Redis库存INCR + DB排班available_count+1
      */
-    private void restoreStock(Long scheduleId) {
+    private void restoreRedisStock(Long scheduleId) {
         try {
             String key = String.format(STOCK_KEY_PREFIX, scheduleId);
             redisTemplate.opsForValue().increment(key);
-            scheduleService.lambdaUpdate()
-                    .eq(Schedule::getScheduleId, scheduleId)
-                    .setSql("available_count = available_count + 1")
-                    .update();
             log.info("号源已回补: scheduleId={}", scheduleId);
         } catch (Exception e) {
             log.error("号源回补失败，需人工核对: scheduleId={}", scheduleId, e);

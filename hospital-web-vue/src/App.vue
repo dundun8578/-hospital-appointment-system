@@ -19,13 +19,20 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const token = ref(localStorage.getItem('token'))
 const nickname = ref(JSON.parse(localStorage.getItem('userInfo') || '{}').realName || '用户')
 const isAdmin = ref(JSON.parse(localStorage.getItem('userInfo') || '{}').role === 'ADMIN')
+const route = useRoute()
+watch(() => route.fullPath, () => {
+  const user = JSON.parse(localStorage.getItem('userInfo') || '{}')
+  token.value = localStorage.getItem('token')
+  nickname.value = user.realName || '用户'
+  isAdmin.value = user.role === 'ADMIN'
+})
 
 function logout() {
   localStorage.removeItem('token')

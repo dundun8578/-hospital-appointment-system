@@ -79,7 +79,7 @@ async function submitBooking() {
   submitting.value = true
   try {
     await createAppointment({ ...bookingForm, idCardType: 1 })
-    ElMessage.success('预约成功，短信通知已发送，请查看我的预约')
+    ElMessage.success('预约成功，请查看我的预约')
     dialogVisible.value = false
     await load()
   } finally {

@@ -24,10 +24,17 @@ public class CacheConfig {
                 .serializeKeysWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+                        .fromSerializer(jsonSerializer()));
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(configuration)
                 .transactionAware()
                 .build();
+    }
+
+    private GenericJackson2JsonRedisSerializer jsonSerializer() {
+        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer();
+        serializer.configure(mapper -> mapper.registerModule(
+                new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+        return serializer;
     }
 }

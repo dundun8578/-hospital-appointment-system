@@ -6,7 +6,7 @@
         <el-tab-pane label="登录" name="login">
           <el-form :model="loginForm" label-width="0">
             <el-form-item>
-              <el-input v-model="loginForm.username" placeholder="用户名" />
+              <el-input v-model="loginForm.username" placeholder="手机号" inputmode="tel" autocomplete="username" />
             </el-form-item>
             <el-form-item>
               <el-input v-model="loginForm.password" type="password" placeholder="密码" show-password />
@@ -50,12 +50,12 @@ function saveTokenAndGo(data) {
 
 async function doLogin() {
   if (!loginForm.value.username || !loginForm.value.password) {
-    ElMessage.warning('请输入用户名和密码')
+    ElMessage.warning('请输入手机号和密码')
     return
   }
   loading.value = true
   try {
-    saveTokenAndGo(await login(loginForm.value))
+    saveTokenAndGo(await login({ phone: loginForm.value.username, password: loginForm.value.password }))
   } finally {
     loading.value = false
   }

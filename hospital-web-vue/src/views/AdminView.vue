@@ -15,7 +15,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="号源数量" prop="totalCount"><el-input-number v-model="form.totalCount" :min="1" :max="500" /></el-form-item>
-        <el-form-item label="挂号费" prop="price"><el-input-number v-model="form.price" :min="0" :precision="2" /></el-form-item>
+        <el-form-item label="挂号费" prop="price"><el-input-number v-model="form.price" :min="0.01" :precision="2" /></el-form-item>
         <el-form-item><el-button type="primary" :loading="submitting" @click="submit">创建并预热库存</el-button></el-form-item>
       </el-form>
     </el-card>
@@ -30,7 +30,7 @@ import { createSchedule, syncAllScheduleStock } from '../api'
 const formRef = ref()
 const submitting = ref(false)
 const syncing = ref(false)
-const form = reactive({ doctorId: 1, workDate: '', timeSlot: 1, totalCount: 20, price: 0 })
+const form = reactive({ doctorId: 1, workDate: '', timeSlot: 1, totalCount: 20, price: 10 })
 const rules = {
   doctorId: [{ required: true, message: '请输入医生ID', trigger: 'blur' }],
   workDate: [{ required: true, message: '请选择日期', trigger: 'change' }],

@@ -50,7 +50,7 @@ public class AppointmentMQServiceImpl implements AppointmentMQService {
             message.setAppointmentId(result.getAppointmentId());
             message.setUserId(userId);
             message.setScheduleId(dto.getScheduleId());
-            com.hospital.appointment.vo.AppointmentVO detail = appointmentService.getAppointmentDetail(result.getAppointmentId());
+            com.hospital.appointment.vo.AppointmentVO detail = appointmentService.getAppointmentDetail(result.getAppointmentId(), userId);
             message.setDoctorId(detail.getDoctorId());
             message.setHospitalId(detail.getHospitalId());
             message.setDepartmentId(detail.getDepartmentId());
