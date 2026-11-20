@@ -29,6 +29,8 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -73,12 +75,12 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     /**
      * 创建预约（核心方法）
      * 流程：
-     * 1. 校验排班信息
-     * 2. 获取分布式锁
+     * 1. 获取分布式锁
+     * 2. 校验排班信息
      * 3. 检查用户是否已预约
      * 4. Redis Lua脚本原子扣减库存
      * 5. 扣减成功则保存预约记录
-     * 6. 释放锁
+     * 6. 事务完成并执行库存补偿后释放锁
      *
      * @param userId 用户ID
      * @param appointmentCreateDTO 预约信息
@@ -94,20 +96,7 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         RLock lock = null;
 
         try {
-            // 1. 查询排班信息
-            Schedule schedule = scheduleService.getById(scheduleId);
-            if (schedule == null || schedule.getStatus() != 1) {
-                log.warn("排班不存在或已停诊: scheduleId={}", scheduleId);
-                return AppointmentResultVO.fail("排班不存在或已停诊");
-            }
-
-            // 检查排班日期
-            if (schedule.getWorkDate().isBefore(LocalDate.now())) {
-                log.warn("排班日期已过期: scheduleId={}, workDate={}", scheduleId, schedule.getWorkDate());
-                return AppointmentResultVO.fail("排班日期已过期");
-            }
-
-            // 2. 获取分布式锁（防止重复提交）
+            // 1. 先获取锁，再读取数据库，避免等待锁前建立旧的可重复读快照。
             lock = distributedLockUtil.getAppointmentLock(userId, scheduleId);
             if (lock == null) {
                 log.warn("获取分布式锁失败，请求过于频繁: userId={}, scheduleId={}", userId, scheduleId);
@@ -115,6 +104,17 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
             }
 
             try {
+                // 2. 查询并校验排班信息
+                Schedule schedule = scheduleService.getById(scheduleId);
+                if (schedule == null || schedule.getStatus() != 1) {
+                    log.warn("排班不存在或已停诊: scheduleId={}", scheduleId);
+                    return AppointmentResultVO.fail("排班不存在或已停诊");
+                }
+                if (schedule.getWorkDate().isBefore(LocalDate.now())) {
+                    log.warn("排班日期已过期: scheduleId={}, workDate={}", scheduleId, schedule.getWorkDate());
+                    return AppointmentResultVO.fail("排班日期已过期");
+                }
+
                 // 3. 双重检查：数据库查询是否已预约（防止并发穿透）
                 int appointedCount = baseMapper.checkUserAppointed(userId, scheduleId);
                 if (appointedCount > 0) {
@@ -131,7 +131,7 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 }
 
                 // 5. Redis Lua 原子执行「判断余量→扣减」，防止并发超挂
-                if (!redisStockUtil.deductStock(scheduleId)) {
+                if (!deductStockWithRollbackCompensation(userId, scheduleId)) {
                     log.warn("号源已约满: scheduleId={}", scheduleId);
                     return AppointmentResultVO.fail("号源已约满");
                 }
@@ -152,17 +152,11 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 appointment.setStatus(1); // 待就诊
                 appointment.setVisitStatus(0); // 未就诊
 
-                try {
-                    baseMapper.insert(appointment);
+                baseMapper.insert(appointment);
 
-                    // DB侧也使用带库存条件的原子更新，避免缓存漂移时扣成负数
-                    if (!scheduleService.deductAvailableStock(scheduleId)) {
-                        throw new BusinessException(ResultCode.PARAM_INVALID, "号源已约满");
-                    }
-                } catch (Exception e) {
-                    // DB写入失败，回补Redis库存
-                    redisStockUtil.restoreStock(scheduleId);
-                    throw e;
+                // DB侧也使用带库存条件的原子更新，避免缓存漂移时扣成负数
+                if (!scheduleService.deductAvailableStock(scheduleId)) {
+                    throw new BusinessException(ResultCode.PARAM_INVALID, "号源已约满");
                 }
 
                 log.info("预约记录创建成功: appointmentId={}, userId={}, scheduleId={}",
@@ -172,8 +166,8 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 return AppointmentResultVO.success(appointment.getAppointmentId());
 
             } finally {
-                // 7. 释放分布式锁
-                distributedLockUtil.unlock(lock);
+                // 外层 MQ 事务还可能继续写 Outbox，必须等待整个事务完成后再释放锁。
+                distributedLockUtil.unlockAfterTransaction(lock);
             }
 
         } catch (BusinessException e) {
@@ -184,6 +178,37 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
             // 必须抛出异常触发事务回滚，不能把数据库异常转换为普通返回值
             throw new BusinessException(ResultCode.SYSTEM_ERROR, "系统异常，请稍后重试");
         }
+    }
+
+    /** 将成功的 Redis 扣减绑定到当前事务，覆盖外层 Outbox 写入失败等回滚路径。 */
+    private boolean deductStockWithRollbackCompensation(Long userId, Long scheduleId) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()
+                || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException("预约库存扣减必须在事务中执行");
+        }
+        if (!redisStockUtil.deductStock(scheduleId)) {
+            return false;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    try {
+                        // 等数据库完成回滚后再释放号源；不能在内层 catch 中重复回补。
+                        redisStockUtil.restoreStock(scheduleId);
+                    } catch (Exception e) {
+                        // 保留原始业务异常，补偿失败需根据日志核对数据库与 Redis 库存。
+                        log.error("预约回滚后Redis库存补偿失败，需要核对库存: userId={}, scheduleId={}",
+                                userId, scheduleId, e);
+                    }
+                } else if (status == STATUS_UNKNOWN) {
+                    // 提交结果不明时不能盲目增加库存，避免数据库已提交却释放号源。
+                    log.error("预约事务结果未知，需要核对库存: userId={}, scheduleId={}", userId, scheduleId);
+                }
+            }
+        });
+        return true;
     }
 
     /**

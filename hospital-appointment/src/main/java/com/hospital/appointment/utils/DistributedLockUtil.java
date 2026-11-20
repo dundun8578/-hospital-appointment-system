@@ -1,12 +1,12 @@
 package com.hospital.appointment.utils;
 
-import com.hospital.doctor.entity.Schedule;
-import com.hospital.doctor.service.ScheduleService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.concurrent.TimeUnit;
 
@@ -24,9 +24,6 @@ public class DistributedLockUtil {
     @Autowired
     private RedissonClient redissonClient;
 
-    @Autowired
-    private ScheduleService scheduleService;
-
     /**
      * 预约锁Key前缀
      */
@@ -36,11 +33,6 @@ public class DistributedLockUtil {
      * 锁等待时间（秒）
      */
     private static final long LOCK_WAIT_TIME = 5;
-
-    /**
-     * 锁自动释放时间（秒）
-     */
-    private static final long LOCK_LEASE_TIME = 30;
 
     /**
      * 获取预约分布式锁
@@ -53,10 +45,10 @@ public class DistributedLockUtil {
         String lockKey = String.format(APPOINTMENT_LOCK_PREFIX, userId, scheduleId);
         RLock lock = redissonClient.getLock(lockKey);
 
-        // 尝试获取锁，等待5秒，锁30秒后自动释放
+        // 等待最多5秒，不指定固定租期，由 Redisson watchdog 续期直到主动释放。
         boolean acquired = false;
         try {
-            acquired = lock.tryLock(LOCK_WAIT_TIME, LOCK_LEASE_TIME, TimeUnit.SECONDS);
+            acquired = lock.tryLock(LOCK_WAIT_TIME, TimeUnit.SECONDS);
             if (acquired) {
                 log.info("获取分布式锁成功: userId={}, scheduleId={}, lockKey={}", userId, scheduleId, lockKey);
             } else {
@@ -68,6 +60,34 @@ public class DistributedLockUtil {
         }
 
         return acquired ? lock : null;
+    }
+
+    /**
+     * 有事务时延迟至事务完成后解锁。应在业务 finally 中调用，
+     * 使之前注册的库存回滚补偿先执行，再允许后续预约进入。
+     */
+    public void unlockAfterTransaction(RLock lock) {
+        if (lock == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    try {
+                        unlock(lock);
+                    } catch (Exception e) {
+                        // 事务已经结束，解锁失败不能把已提交的预约报告为业务失败。
+                        log.error("事务完成后释放预约锁失败: lockKey={}, transactionStatus={}",
+                                lock.getName(), status, e);
+                    }
+                }
+            });
+        } else {
+            // 非事务调用也必须释放已获取的锁。
+            unlock(lock);
+        }
     }
 
     /**
